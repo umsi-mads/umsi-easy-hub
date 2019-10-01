@@ -1,0 +1,703 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'MADS jupyter hub deployment'
+# TO DO: Add ELB to default deployment.
+Parameters:
+
+  ControlNodeRole:
+    Type: String
+    Description: Role used to deploy and control EKS
+
+  BillingTag:
+    Type: String
+    Description: Tag used for billing monitoring
+    Default: jupyterhub
+  
+  ScriptBucket:
+    Type: String
+    Description: Bucket that stores startup scripts used by Cluster instances
+  
+  # DomainCertificateArn:
+  #   Type: String
+  #   Description: ARN of the certificate attached to your domain
+  
+  # EfsVpcId:
+  #   Type: String
+  #   Description: VPC id of EFS that needs to be peered.
+  
+  # EfsRouteTableId:
+  #   Type: String
+  #   Description: Id of route table of Efs subnets
+
+  # EfsVpcBlock:
+  #   Type: String
+  #   Description: Vpc block of efs
+
+  DefaultAlbForwardPortHttp:
+    Type: String
+    Description: Default port to forward http traffic to on the nodes
+    Default: 30254
+  
+  DefaultAlbForwardPortHttps:
+    Type: String
+    Description: Default port to forward https traffic to on the nodes
+    Default: 30255
+
+  VpcBlock:
+    Type: String
+    #Default: 172.16.0.0/16
+    Default: 172.16.0.0/16
+    Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range.
+
+  Subnet01Block:
+    Type: String
+    Default: 172.16.64.0/18
+    Description: CidrBlock for subnet 01 within the VPC
+
+  Subnet02Block:
+    Type: String
+    Default: 172.16.128.0/18
+    Description: CidrBlock for subnet 02 within the VPC
+
+  Subnet03Block:
+    Type: String
+    Default: 172.16.192.0/18
+    Description: CidrBlock for subnet 03 within the VPC
+  
+  ClusterStage:
+    Type: String
+    Description: Specifies which bucket to pull config from
+  
+  ScaleOutPolicyTargetValue:
+    Type: Number
+    Description: Target average cpu utilization for cluster nodes
+    Default: 60
+  
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the master and node instances
+    Type: AWS::EC2::KeyPair::KeyName
+  
+  NodeImageId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI id for the node instances.
+    Default: "ami-0c24db5df6badc35a"
+  
+  NodeInstanceType:
+    Description: EC2 instance type for the node instances
+    Type: String
+    Default: t3.xlarge
+  
+  NodeInstanceMem:
+    Description: EC2 instance memory (in Gb)
+    Type: Number
+    Default: 16
+  
+  UserPodMem:
+    Description: Amount of memory to assign to each user pod
+    Type: Number
+    Default: 4
+  
+  DesiredPodBuffer:
+    Description: Amount of pods on standby ready to take users
+    Type: Number
+    Default: 1
+
+  NodeAutoScalingGroupMinSize:
+    Type: Number
+    Description: Minimum size of Node Group ASG.
+    Default: 1
+
+  NodeAutoScalingGroupMaxSize:
+    Type: Number
+    Description: Maximum size of Node Group ASG. Set to at least 1 greater than NodeAutoScalingGroupDesiredCapacity.
+    Default: 4
+
+  NodeAutoScalingGroupDesiredCapacity:
+    Type: Number
+    Description: Desired capacity of Node Group ASG.
+    Default: 1
+
+  NodeVolumeSize:
+    Type: Number
+    Description: Node volume size
+    Default: 100
+
+  BootstrapArguments:
+    Description: Arguments to pass to the bootstrap script. See files/bootstrap.sh in https://github.com/awslabs/amazon-eks-ami
+    Default: ""
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Worker Network Configuration"
+        Parameters:
+          - VpcBlock
+          - Subnet01Block
+          - Subnet02Block
+          - Subnet03Block
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:  !Ref VpcBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-VPC'
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-IGW'
+
+  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName} Public Subnets'
+      - Key: Network
+        Value: Public
+
+  Route:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet01:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 01
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: Subnet01Block
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-Subnet01"
+
+  Subnet02:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 02
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: Subnet02Block
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-Subnet02"
+
+  Subnet03:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 03
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: Subnet03Block
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-Subnet03"
+
+  Subnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet01
+      RouteTableId: !Ref RouteTable
+
+  Subnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet02
+      RouteTableId: !Ref RouteTable
+
+  Subnet03RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet03
+      RouteTableId: !Ref RouteTable
+
+  # EfsVpcPeeringConnection:
+  #   Type: AWS::EC2::VPCPeeringConnection
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     PeerVpcId: !Sub 'vpc-${EfsVpcId}'
+  
+  # Note: Hardcoded the /16 domain of EFS VPC block
+  # EC2ToEFSPeeringRoute:
+  #   DependsOn: 
+  #   - EfsVpcPeeringConnection
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Ref RouteTable
+  #     DestinationCidrBlock: !Sub '${EfsVpcBlock}/16'
+  #     VpcPeeringConnectionId: !Ref EfsVpcPeeringConnection
+  
+  # EFSToEC2PeeringRoute:
+  #   DependsOn: 
+  #   - EfsVpcPeeringConnection
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Sub 'rtb-${EfsRouteTableId}'
+  #     DestinationCidrBlock: !Ref VpcBlock
+  #     VpcPeeringConnectionId: !Ref EfsVpcPeeringConnection
+  
+  AlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Security group for master elastic load balancer
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+
+  # AlbListenerHttps:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     Certificates: [ CertificateArn: !Ref DomainCertificateArn]
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn:
+  #           Ref: AlbTargetGroupHttps
+  #     LoadBalancerArn:
+  #         Ref: Alb
+  #     Port: 443
+  #     Protocol: HTTPS
+  
+  AlbListenerHttp:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: AlbTargetGroupHttp
+      LoadBalancerArn: 
+          Ref: Alb
+      Port: 80
+      Protocol: HTTP
+  
+  AlbTargetGroupHttps:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub jh-${ClusterStage}-target-group-https
+      Port: !Ref DefaultAlbForwardPortHttps
+      Protocol: HTTPS
+      VpcId:
+        Ref: VPC
+  
+  AlbTargetGroupHttp:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub jh-${ClusterStage}-target-group-http
+      Port: !Ref DefaultAlbForwardPortHttp
+      Protocol: HTTP
+      VpcId:
+        Ref: VPC
+
+  Alb:
+    DependsOn:
+      - Subnet01
+      - Subnet02
+      - Subnet03
+      - AlbSg
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${AWS::StackName}-alb
+      Scheme: internet-facing
+      Subnets: [ !Ref Subnet01, !Ref Subnet02, !Ref Subnet03 ]
+      SecurityGroups: [ !Ref AlbSg ]
+      Tags:
+      - Key: Purpose
+        Value: jupyterhub
+
+  ControlPlaneSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cluster communication with worker nodes
+      VpcId: !Ref VPC
+  
+  ControlPlaneSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow pods to communicate with the cluster API Server
+      GroupId: !Ref ControlPlaneSecurityGroup
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      IpProtocol: tcp
+      ToPort: 443
+      FromPort: 443
+  
+  ControlPlaneEgressToNodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow the cluster control plane to communicate with worker Kubelet and pods
+      GroupId: !Ref ControlPlaneSecurityGroup
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      IpProtocol: tcp
+      FromPort: 1025
+      ToPort: 65535
+  
+  ControlPlaneEgressToNodeSecurityGroupOn443:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow the cluster control plane to communicate with pods running extension API servers on port 443
+      GroupId: !Ref ControlPlaneSecurityGroup
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+
+  EksControlPlaneRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - eks.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+      RoleName: !Sub '${AWS::StackName}-eks-control-plane-role'
+  
+  EksCluster:
+    Type: "AWS::EKS::Cluster"
+    DependsOn: 
+    - EksControlPlaneRole
+    - ControlPlaneSecurityGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-EksCluster"
+      Version: "1.12"
+      # Can we just reference the role from above?
+      RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-eks-control-plane-role"
+      ResourcesVpcConfig:
+        SecurityGroupIds: [!Ref ControlPlaneSecurityGroup]
+        SubnetIds: [!Ref Subnet01, !Ref Subnet02 ]
+
+  ControlNodeSecurityGroup:
+  # This is a very open SG!!  
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Control node security group
+      VpcId:
+        !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          FromPort: 0
+          ToPort: 65535
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          FromPort: 0
+          ToPort: 65535
+
+  ControlNode:
+    Type: "AWS::EC2::Instance"
+    DependsOn: 
+    - EksCluster
+    - NodeAsg
+    Properties:
+      ImageId: "ami-01e3b8c3a51e88954"
+      KeyName: "si-aws-mads-ec2"
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref ControlNodeRole
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: [ !Ref ControlNodeSecurityGroup, !Ref NodeSecurityGroup ]
+          SubnetId: !Ref "Subnet01"
+      Tags:
+      - Key: Purpose
+        Value: !Ref BillingTag
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-control-node'
+      UserData:
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              cd /home/ec2-user/
+
+              aws s3 cp s3://${ScriptBucket}/autoscale_daemon.py /home/ec2-user/autoscale_daemon.py
+              echo "* * * * * ec2-user python3 /home/ec2-user/autoscale_daemon.py --asg=${NodeAsg} --nodeMem=${InstanceMem} --userMem=${UserMem} --availPods=${Buffer}" >> /etc/cron.d/autoscale_daemon
+              echo "* * * * * ec2-user sleep 15 && python3 /home/ec2-user/autoscale_daemon.py --asg=${NodeAsg} --nodeMem=${InstanceMem} --userMem=${UserMem} --availPods=${Buffer}" >> /etc/cron.d/autoscale_daemon
+              echo "* * * * * ec2-user sleep 30 && python3 /home/ec2-user/autoscale_daemon.py --asg=${NodeAsg} --nodeMem=${InstanceMem} --userMem=${UserMem} --availPods=${Buffer}" >> /etc/cron.d/autoscale_daemon
+              echo "* * * * * ec2-user sleep 45 && python3 /home/ec2-user/autoscale_daemon.py --asg=${NodeAsg} --nodeMem=${InstanceMem} --userMem=${UserMem} --availPods=${Buffer}" >> /etc/cron.d/autoscale_daemon
+
+              aws s3 cp s3://${ScriptBucket}/control_node_startup_script.sh startup-script.sh
+              aws s3 cp s3://${ScriptBucket}/helm_config.yaml config.yaml
+
+              chmod +x startup-script.sh
+
+              su ec2-user -c './startup-script.sh "${ClusterName}" "arn:aws:iam::${AWS::AccountId}:role\/${Role}" "${JupyterHubImage}"'
+
+            - {
+              ClusterName: !Sub "${AWS::StackName}-EksCluster",
+              Role: !Ref NodeInstanceRole,
+              JupyterHubImage: "jupyterhub/jupyterhub",
+              InstanceMem: !Ref NodeInstanceMem,
+              UserMem: !Ref UserPodMem,
+              Buffer: !Ref DesiredPodBuffer,
+              }
+
+  NodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref NodeInstanceRole
+  
+  NodeLoadbalancingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "NodeLoadbalancing"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Action:
+              - "elasticloadbalancing:*"
+            Resource: "*" 
+      Roles:
+        -
+          Ref: NodeInstanceRole
+
+  NodeInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemFullAccess
+        # - !Ref NodeLoadbalancingPolicy
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      RoleName: !Sub '${AWS::StackName}-eks-node-role'
+
+  NodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for all nodes in the cluster
+      VpcId:
+        !Ref VPC  
+      Tags:
+      - Key: !Sub "kubernetes.io/cluster/${AWS::StackName}-EksCluster"
+        Value: 'owned'
+  
+  NodeSecurityGroupMasterElbIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow master elb to communicate with nodes
+      GroupId: !Ref NodeSecurityGroup
+      SourceSecurityGroupId: !Ref AlbSg
+      IpProtocol: '-1'
+      FromPort: 0
+      ToPort: 65535
+  
+  NodeSecurityGroupElbIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow node to communicate with each other
+      GroupId: !Ref NodeSecurityGroup
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      IpProtocol: '-1'
+      FromPort: 0
+      ToPort: 65535
+  
+  NodeSecurityGroupFromControlPlaneIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow worker Kubelets and pods to receive communication from the cluster control plane
+      GroupId: !Ref NodeSecurityGroup
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: tcp
+      FromPort: 1025
+      ToPort: 65535
+  
+  NodeSecurityGroupFromControlPlaneOn443Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow pods running extension API servers on port 443 to receive communication from cluster control plane
+      GroupId: !Ref NodeSecurityGroup
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+
+  NodeAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+    - EksCluster
+    Properties:
+      DesiredCapacity: !Ref NodeAutoScalingGroupDesiredCapacity
+      LaunchConfigurationName: !Ref NodeLaunchConfig
+      MinSize: !Ref NodeAutoScalingGroupMinSize
+      MaxSize: !Ref NodeAutoScalingGroupMaxSize
+      VPCZoneIdentifier: [ !Ref Subnet01 ]
+      Tags:
+      - Key: Purpose
+        Value: !Ref BillingTag
+        PropagateAtLaunch: 'true'
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-node'
+        PropagateAtLaunch: 'true'
+      - Key: !Sub 'kubernetes.io/cluster/${AWS::StackName}-EksCluster'
+        Value: 'owned'
+        PropagateAtLaunch: 'true'
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: '1'
+        MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity
+        PauseTime: 'PT5M'
+
+  ScaleUpAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale up if there is no available space for a user
+      AlarmName: !Sub '${AWS::StackName}-scale-up'
+      AlarmActions: [ !Ref ScaleOutPolicy ]
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: cluster
+          Value: !Ref NodeAsg
+      MetricName: available-space
+      EvaluationPeriods: 1
+      Period: 30
+      Statistic: Minimum
+      Threshold: 1
+      Namespace: Custom
+  
+  ScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref NodeAsg
+      Cooldown: 240
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+      AdjustmentType: ChangeInCapacity
+
+  NodeLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: 'true'
+      IamInstanceProfile: !Ref NodeInstanceProfile
+      ImageId: !Ref NodeImageId
+      InstanceType: !Ref NodeInstanceType
+      KeyName: !Ref KeyName
+      SecurityGroups:
+      - !Ref NodeSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref NodeVolumeSize
+            VolumeType: gp2
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            set -o xtrace
+            /etc/eks/bootstrap.sh "${AWS::StackName}-EksCluster" ${BootstrapArguments}
+            /opt/aws/bin/cfn-signal --exit-code $? \
+                     --stack  ${AWS::StackName} \
+                     --resource NodeAsg  \
+                     --region ${AWS::Region}
+            
+            cd /home/ec2-user/
+
+            aws s3 cp s3://${ScriptBucket}/node_startup_script.sh node_startup_script.sh
+            aws s3 cp s3://${ScriptBucket}/get_target_group.py get_target_group.py
+            chmod +x node_startup_script.sh
+
+            echo "jh-${ClusterStage}-target-group" > config
+
+            ./node_startup_script.sh
+
+
+Outputs:
+
+  SubnetIds:
+    Description: All subnets in the VPC
+    Value: !Join [ ",", [ !Ref Subnet01, !Ref Subnet02, !Ref Subnet03 ] ]
+
+  VpcId:
+    Description: The VPC Id
+    Value: !Ref VPC
+
+  AlbSg:
+    Description: The SG to be attached to the loadbalancer
+    Value: !Ref AlbSg

@@ -1,0 +1,3 @@
+common:
+  SSHKeyName: "si-aws-mads-ec2"
+  ControlNodeRole: "jupyterhub-control-node-dev"

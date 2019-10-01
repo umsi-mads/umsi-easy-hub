@@ -1,0 +1,53 @@
+proxy:
+  secretToken: ""
+  service:
+    nodePorts:
+      http: 30254
+      https: 30255
+
+singleuser:
+  startTimeout: 500
+  memory:
+    limit: "4G"
+    guarantee: "4G"
+  image:
+    name: "jupyter/scipy-notebook"
+    tag: latest
+  profileList:
+    - display_name: "Jupyter Scipy Notebook"
+      description: "The latest scipy notebook."
+      default: true
+  storage:
+    type: hostPath
+    extraVolumes:
+        - name: home
+          hostPath:
+            path: /home/ec2-user/mnt/users/{username}
+        - name: shared
+          hostPath:
+            path: /home/ec2-user/mnt/shared
+    extraVolumeMounts:
+      - name: home
+        mountPath: /home/jovyan/
+      - name: shared
+        mountPath: /home/jovyan/shared
+  extraEnv:
+    CHOWN_HOME: "yes"
+    GRANT_SUDO: "yes"
+  uid: 0
+  fsGid: 0
+  cmd: "start-singleuser.sh"
+  lifecycleHooks:
+    postStart:
+      exec:
+        command: ["chown", "-R", "1000:100", "/home/jovyan/" ]
+      exec:
+        command: ["rm", "-fr", "/home/jovyan/work"]
+prePuller:
+  continuous:
+    enabled: true
+hub:
+  extraConfig:
+    myConfig.py: |
+      c.Spawner.args = ['--KernelSpecManager.whitelist={"python3"}']
+      c.KubeSpawner.image_pull_policy = "Always"
