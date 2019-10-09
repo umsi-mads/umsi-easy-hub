@@ -4,7 +4,24 @@ proxy:
     nodePorts:
       http: 30254
       https: 30255
-
+  # https:
+  #   hosts:
+  #     - yoururl.com
+  #   letsencrypt:
+  #     contactEmail: "youremail@gmail.com"
+# auth:
+#   type: github
+#   github:
+#     clientId: "your github client id"
+#     clientSecret: "your github secret id"
+#     callbackUrl: "https://your_domain/hub/oauth_callback"
+#   admin:
+#     access: true
+#     users:
+#       - github_username
+#   whitelist:
+#     users:
+#       - github_username
 singleuser:
   startTimeout: 500
   memory:
@@ -17,6 +34,10 @@ singleuser:
     - display_name: "Jupyter Scipy Notebook"
       description: "The latest scipy notebook."
       default: true
+    #- display_name: "Custom Notebook Environment"		
+    #  description: "This is my custom notebook environment"		
+    #  kubespawner_override:		
+    #    image: jupyter/base-notebook
   storage:
     type: hostPath
     extraVolumes:
