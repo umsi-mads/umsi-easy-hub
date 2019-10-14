@@ -5,6 +5,7 @@ import ruamel.yaml
 import boto3
 import re
 import argparse
+import json
 from shutil import copyfile
 import subprocess
 
@@ -23,11 +24,51 @@ def load_config(stage="dev"):
     
     return config
 
-def create_bucket(config):
-    account_id = boto3.client('sts').get_caller_identity().get('Account')
-    print(account_id)
+def generate_ssh_key(config):
+    ec2 = boto3.client('ec2')
+    response = ec2.create_key_pair(KeyName='easy-deploy-jupyterhub-{}'.format(config['stage']))
+    print(response)
+    print(response['KeyMaterial'])
 
-    bucket_name = "{}-jupyterhub-{}".format(account_id, config['stage'])
+    with open("{}.pem".format(response['KeyName']), 'w') as f:
+        f.write(response['KeyMaterial'])
+
+    return response['KeyName']
+
+# def generate_role(config):
+
+#     current_user_arn = boto3.Session().client('sts').get_caller_identity()['Arn']
+
+#     print(current_user_arn)
+#     client = boto3.client('iam')
+
+#     policy_document = {'Version': '2012-10-17', 'Statement': [{'Effect': 'Allow', 'Principal': {'Service': 'ec2.amazonaws.com', 'AWS': '{}'.format(current_user_arn)}, 'Action': 'sts:AssumeRole'}]}
+    
+#     response = client.create_role(
+#         AssumeRolePolicyDocument=json.dumps(policy_document),
+#         Path='/',
+#         RoleName='easy-deploy-jupyterhub-role-{}'.format(config['stage']),
+#     )
+
+#     response = client.attach_role_policy(
+#         RoleName='easy-deploy-jupyterhub-role-{}'.format(config['stage']),
+#         PolicyArn='arn:aws:iam::aws:policy/AdministratorAccess'
+#     )
+#     print(response)
+
+#     with open(os.path.expanduser('~/.aws/config'), 'a') as f:
+#         f.write('\n')
+#         f.write('[profile easy-deploy-jupyterhub-{}]\n'.format(config['stage']))
+#         f.write('source_profile = default\n')
+#         f.write('role_arn = arn:aws:iam::{}:role/easy-deploy-jupyterhub-role-{}\n'.format(config['account_id'], config['stage']))
+#         f.write('region = us-east-1\n')
+    
+#     return "easy-deploy-jupyterhub-role-{}".format(config['stage'])
+
+def create_bucket(config):
+    print(config['account_id'])
+
+    bucket_name = "{}-easy-deploy-jupyterhub-{}".format(config['account_id'], config['stage'])
 
     s3_client = boto3.client('s3')
 
@@ -36,8 +77,7 @@ def create_bucket(config):
     return bucket_name
 
 def get_bucket_name(config):
-    account_id = boto3.client('sts').get_caller_identity().get('Account')
-    return "{}-jupyterhub-{}".format(account_id, config['stage'])
+    return "{}-easy-deploy-jupyterhub-{}".format(config['account_id'], config['stage'])
 
 def verify_config(config):
     print(config)
@@ -60,8 +100,8 @@ def configure_cloudformation_template(config):
     cf_yaml['Parameters']['ClusterStage']['Default'] = config['stage']
     cf_yaml['Parameters']['ScriptBucket']['Default'] = get_bucket_name(config)
     cf_yaml['Parameters']['UserPodMem']['Default'] = int(helm_yaml['singleuser']['memory']['limit'][:-1])
-    cf_yaml['Parameters']['KeyName']['Default'] = config['SSHKeyName']
-    cf_yaml['Parameters']['ControlNodeRole']['Default'] = config['ControlNodeRole']
+    cf_yaml['Parameters']['KeyName']['Default'] = config['ssh_key_name']
+    # cf_yaml['Parameters']['ControlNodeRole']['Default'] = config['control_node_role']
 
     with open(dist_path + "cloudformation.yaml", "w") as f:
         ruamel.yaml.round_trip_dump(cf_yaml, f, explicit_start=True)
@@ -105,9 +145,15 @@ if __name__ == "__main__":
 
     stage = args.stage
 
-    config = load_config(stage)
+
+
+    config = {}
     config['stage'] = stage
+    config['account_id'] = boto3.client('sts').get_caller_identity().get('Account')
+    config['ssh_key_name'] = generate_ssh_key(config)
+    # config['control_node_role'] = generate_role(config)
     print(config)
+
     create_bucket(config)
 
     if not os.path.exists(dist_path):

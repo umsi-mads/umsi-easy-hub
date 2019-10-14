@@ -6,6 +6,7 @@ Parameters:
   ControlNodeRole:
     Type: String
     Description: Role used to deploy and control EKS
+    Default: easy-deploy-jupyterhub
 
   BillingTag:
     Type: String

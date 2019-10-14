@@ -10,9 +10,23 @@ Install ruamel.yaml which is a Python package that can configure Cloudformation 
 
 `pip install ruamel.yaml`
 
-You need to create an IAM role that will be used to create and control your cluster. Give this role admin access, and configure the AWS CLI to use this role.  Put the name of this role in `config.yaml`.
+Next, you need to create an IAM role that will be used to create and control your cluster. Give this role **admin access**, and configure the AWS CLI to use this role.
 
-You need to create an SSH key from the AWS console. Download this key so you can use it later. Put the name of this key in `config.yaml`.
+![IAM Role](images/iam_role.png)
+
+This is what your `~/.aws/config` file should look like once you create an IAM role called "easy-deploy-jupyterhub":
+
+![AWS Config](images/aws_config.png)
+
+Make sure that you add a trust relationship between the role you've created and the user who will be assuming this role. See here I've added a trust relationship between my role and and my default AWS user:
+
+![AWS Trust1](images/aws_trust1.png)
+
+![AWS Trust2](images/aws_trust2.png)
+
+If this command executes successfully, you have properly created the IAM role:
+
+`aws s3 --profile easy-deploy-jupyterhub ls`
 
 ### Build package
 
