@@ -36,6 +36,8 @@ If this command executes successfully, you have properly created the IAM role:
 
 `make deploy`
 
+## Usage
+
 ### Test your JupyterHub
 
 Deploying the package will kick off a Cloudformation build in AWS. You can check the status of this build by going to the Cloudformation service in the AWS console. It takes about 15 minutes for everything to build. Once it's finished building, go to the EC2 service and find the loadbalancer for your JupyterHub. Copy the domain of the loadbalancer in your browser and you should see a working JupyterHub!
