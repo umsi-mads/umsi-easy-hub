@@ -12,7 +12,7 @@ import subprocess
 dist_path = "dist/"
 template_file = "src/cloudformation_template.yaml"
 
-def load_config(stage="dev"):
+def load_config(tag="dev"):
     config = {}
     with open("config.yaml", 'r') as f:
         config = yaml.safe_load(f)
@@ -26,7 +26,7 @@ def load_config(stage="dev"):
 
 def generate_ssh_key(config):
     ec2 = boto3.client('ec2')
-    response = ec2.create_key_pair(KeyName='easy-deploy-jupyterhub-{}'.format(config['stage']))
+    response = ec2.create_key_pair(KeyName='{}-{}'.format(config['project'], config['tag']))
     print(response)
     print(response['KeyMaterial'])
 
@@ -47,28 +47,28 @@ def generate_ssh_key(config):
 #     response = client.create_role(
 #         AssumeRolePolicyDocument=json.dumps(policy_document),
 #         Path='/',
-#         RoleName='easy-deploy-jupyterhub-role-{}'.format(config['stage']),
+#         RoleName='easy-deploy-jupyterhub-role-{}'.format(config['tag']),
 #     )
 
 #     response = client.attach_role_policy(
-#         RoleName='easy-deploy-jupyterhub-role-{}'.format(config['stage']),
+#         RoleName='easy-deploy-jupyterhub-role-{}'.format(config['tag']),
 #         PolicyArn='arn:aws:iam::aws:policy/AdministratorAccess'
 #     )
 #     print(response)
 
 #     with open(os.path.expanduser('~/.aws/config'), 'a') as f:
 #         f.write('\n')
-#         f.write('[profile easy-deploy-jupyterhub-{}]\n'.format(config['stage']))
+#         f.write('[profile easy-deploy-jupyterhub-{}]\n'.format(config['tag']))
 #         f.write('source_profile = default\n')
-#         f.write('role_arn = arn:aws:iam::{}:role/easy-deploy-jupyterhub-role-{}\n'.format(config['account_id'], config['stage']))
+#         f.write('role_arn = arn:aws:iam::{}:role/easy-deploy-jupyterhub-role-{}\n'.format(config['account_id'], config['tag']))
 #         f.write('region = us-east-1\n')
     
-#     return "easy-deploy-jupyterhub-role-{}".format(config['stage'])
+#     return "easy-deploy-jupyterhub-role-{}".format(config['tag'])
 
 def create_bucket(config):
     print(config['account_id'])
 
-    bucket_name = "{}-easy-deploy-jupyterhub-{}".format(config['account_id'], config['stage'])
+    bucket_name = "{}-{}-{}".format(config['account_id'], config['project'], config['tag'])
 
     s3_client = boto3.client('s3')
 
@@ -77,7 +77,7 @@ def create_bucket(config):
     return bucket_name
 
 def get_bucket_name(config):
-    return "{}-easy-deploy-jupyterhub-{}".format(config['account_id'], config['stage'])
+    return "{}-{}-{}".format(config['account_id'], config['project'], config['tag'])
 
 def verify_config(config):
     print(config)
@@ -97,7 +97,7 @@ def configure_cloudformation_template(config):
 
     print(config)
     #cf_yaml['Parameters']['DefaultAlbForwardPort']['Default'] = config['HttpsPort']
-    cf_yaml['Parameters']['ClusterStage']['Default'] = config['stage']
+    cf_yaml['Parameters']['ClusterTag']['Default'] = config['tag']
     cf_yaml['Parameters']['ScriptBucket']['Default'] = get_bucket_name(config)
     cf_yaml['Parameters']['UserPodMem']['Default'] = int(helm_yaml['singleuser']['memory']['limit'][:-1])
     cf_yaml['Parameters']['KeyName']['Default'] = config['ssh_key_name']
@@ -139,16 +139,17 @@ def upload_cluster_scripts(config):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stage", "-s", required=True, help="stage to build, either dev or prod")
+    parser.add_argument("--tag", "-t", required=True, help="tag to build, must be alphanumeric like \"prod\" or \"test\"")
+    parser.add_argument("--project", "-p", required=True, help="project name")
 
     args = parser.parse_args()
 
-    stage = args.stage
-
-
+    tag = args.tag
+    project = args.project
 
     config = {}
-    config['stage'] = stage
+    config['tag'] = tag
+    config['project'] = project
     config['account_id'] = boto3.client('sts').get_caller_identity().get('Account')
     config['ssh_key_name'] = generate_ssh_key(config)
     # config['control_node_role'] = generate_role(config)

@@ -64,7 +64,7 @@ Parameters:
     Default: 172.16.192.0/18
     Description: CidrBlock for subnet 03 within the VPC
   
-  ClusterStage:
+  ClusterTag:
     Type: String
     Description: Specifies which bucket to pull config from
   
@@ -278,6 +278,47 @@ Resources:
   #     DestinationCidrBlock: !Ref VpcBlock
   #     VpcPeeringConnectionId: !Ref EfsVpcPeeringConnection
   
+  EFS:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-efs
+  
+  Subnet01EfsMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: EFS
+      SubnetId:
+        Ref: Subnet01
+      SecurityGroups:
+        - Ref: ControlNodeSecurityGroup
+        - Ref: NodeSecurityGroup
+  
+  Subnet02EfsMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: EFS
+      SubnetId:
+        Ref: Subnet02
+      SecurityGroups:
+        - Ref: ControlNodeSecurityGroup
+        - Ref: NodeSecurityGroup
+  
+  Subnet03EfsMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: EFS
+      SubnetId:
+        Ref: Subnet03
+      SecurityGroups:
+        - Ref: ControlNodeSecurityGroup
+        - Ref: NodeSecurityGroup
+
   AlbSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -329,7 +370,7 @@ Resources:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
       HealthCheckPath: /
-      Name: !Sub jh-${ClusterStage}-target-group-https
+      Name: !Sub jh-${ClusterTag}-target-group-https
       Port: !Ref DefaultAlbForwardPortHttps
       Protocol: HTTPS
       VpcId:
@@ -341,7 +382,7 @@ Resources:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
       HealthCheckPath: /
-      Name: !Sub jh-${ClusterStage}-target-group-http
+      Name: !Sub jh-${ClusterTag}-target-group-http
       Port: !Ref DefaultAlbForwardPortHttp
       Protocol: HTTP
       VpcId:
@@ -459,7 +500,7 @@ Resources:
     - NodeAsg
     Properties:
       ImageId: "ami-01e3b8c3a51e88954"
-      KeyName: "si-aws-mads-ec2"
+      KeyName: !Ref KeyName
       InstanceType: t2.micro
       IamInstanceProfile: !Ref ControlNodeRole
       NetworkInterfaces:
@@ -684,9 +725,12 @@ Resources:
             aws s3 cp s3://${ScriptBucket}/get_target_group.py get_target_group.py
             chmod +x node_startup_script.sh
 
-            echo "jh-${ClusterStage}-target-group" > config
+            EFSID=${EFS}
+            echo ${EFS} >> efsid_watch.txt
+            echo $EFSID >> efsid_watch.txt
+            sed -i "s/EFSIDREPLACE/$EFSID/g" node_startup_script.sh
 
-            ./node_startup_script.sh
+            ./node_startup_script.sh "jh-${ClusterTag}-target-group"
 
 
 Outputs:
