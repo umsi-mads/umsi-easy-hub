@@ -158,7 +158,10 @@ if __name__=="__main__":
     nodes_info = subprocess.run(["kubectl", "get", "nodes"],stdout=subprocess.PIPE).stdout.decode('utf-8')
     log.info("Node Info:\n%s" % nodes_info)
     nodes = parse_nodes_info(nodes_info)
-    
+
+    if nodes_info == "":
+        log.info("Couldn't get node info... Exiting...")
+        sys.exit()
 
     # Get node data for each node and sort into available, empty, and full. Also calculate number of available pods along the way
     for node in nodes:

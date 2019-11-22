@@ -493,6 +493,30 @@ Resources:
           FromPort: 0
           ToPort: 65535
 
+  ControlNodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref ControlNodeInstanceRole
+
+  ControlNodeInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      RoleName: !Sub '${AWS::StackName}-control-node-role'
+
   ControlNode:
     Type: "AWS::EC2::Instance"
     DependsOn: 
@@ -501,7 +525,7 @@ Resources:
     Properties:
       ImageId: "ami-01e3b8c3a51e88954"
       KeyName: !Ref KeyName
-      InstanceType: t2.micro
+      InstanceType: t3.medium
       IamInstanceProfile: !Ref ControlNodeRole
       NetworkInterfaces:
         - AssociatePublicIpAddress: "true"
@@ -548,22 +572,6 @@ Resources:
       Path: "/"
       Roles:
       - !Ref NodeInstanceRole
-  
-  NodeLoadbalancingPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: "NodeLoadbalancing"
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          -
-            Effect: "Allow"
-            Action:
-              - "elasticloadbalancing:*"
-            Resource: "*" 
-      Roles:
-        -
-          Ref: NodeInstanceRole
 
   NodeInstanceRole:
     Type: AWS::IAM::Role
@@ -586,6 +594,22 @@ Resources:
         # - !Ref NodeLoadbalancingPolicy
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
       RoleName: !Sub '${AWS::StackName}-eks-node-role'
+
+  NodeLoadbalancingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "NodeLoadbalancing"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Action:
+              - "elasticloadbalancing:*"
+            Resource: "*" 
+      Roles:
+        -
+          Ref: NodeInstanceRole
 
   NodeSecurityGroup:
     Type: AWS::EC2::SecurityGroup
