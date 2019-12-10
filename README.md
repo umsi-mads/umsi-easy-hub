@@ -1,38 +1,18 @@
 # Easy Deploy JupyterHub
 
-The purpose of this project is to provide a one-click deployment of a JupyterHub server that is immediately ready for many people to use. The JupyterHub runs on a Kubernetes cluster in AWS. It persists user data on an NFS server in AWS, autoscales automatically, and can easily be configured further for your needs.
+The purpose of this project is to provide a one-click deployment of a JupyterHub server that is immediately ready for many people to use. The JupyterHub runs on a Kubernetes cluster in AWS. It persists user data on an NFS server in AWS, autoscales automatically, and can easily be configured further for your needs (see below in "Extra Configuration"). This project deploys the JupyterHub in two steps. First it deploys a new VPC and control node, then the control node deploys and configures the K8s cluster and necessary AWS resources. 
 
 ## Deployment
 
 ### Prerequisites
 
-Install ruamel.yaml which is a Python package that can configure Cloudformation Yaml files:
+These instructions assume that you are familiar with AWS and that your the CLI is configured properly for your AWS account.
 
-`pip install ruamel.yaml`
+Install PyYaml and Boto3 python packages:
 
-Next, you need to create an IAM role that will be used to create and control your cluster. Give this role **admin access**, and configure the AWS CLI to use this role.
+`pip install pyyaml boto3`
 
-![IAM Role](images/iam_role.png)
-
-This is what your `~/.aws/config` file should look like once you create an IAM role called "easy-deploy-jupyterhub":
-
-![AWS Config](images/aws_config.png)
-
-Make sure that you add a trust relationship between the role you've created and the user who will be assuming this role. See here I've added a trust relationship between my role and and my default AWS user:
-
-![AWS Trust1](images/aws_trust1.png)
-
-![AWS Trust2](images/aws_trust2.png)
-
-If this command executes successfully, you have properly created the IAM role:
-
-`aws s3 --profile easy-deploy-jupyterhub ls`
-
-### Build package
-
-`make build-dev` or `make build-prod`
-
-### Deploy package
+### Deploy the JupyterHub
 
 `make deploy`
 
@@ -40,13 +20,13 @@ If this command executes successfully, you have properly created the IAM role:
 
 ### Test your JupyterHub
 
-Deploying the package will kick off a Cloudformation build in AWS. You can check the status of this build by going to the Cloudformation service in the AWS console. It takes about 15 minutes for everything to build. Once it's finished building, go to the EC2 service and find the loadbalancer for your JupyterHub. Copy the domain of the loadbalancer in your browser and you should see a working JupyterHub!
+Deploying the package will kick off two CloudFormation Stacks in AWS. You can check the status of this build by going to the Cloudformation service in the AWS console. It takes about 20 minutes for everything to build. Once it's finished building, go to the EC2 service and find the loadbalancer for your JupyterHub. Copy the domain of the loadbalancer in your browser and you should see a working JupyterHub!
 
 ### Configuring your cluster
 
 Your JupyterHub cluster is managed by a control node. You can access this node with the SSH key you entered in the `config.yaml` file. You can find the ip address / domain of the control node in the EC2 service console and then ssh using the following command:
 
-`ssh -i "ec2-key.pem" ec2-user@ec2-3-93-72-11.compute-1.amazonaws.com`
+`ssh -i "umsi-easy-hub-test.pem" ec2-user@ec2-3-93-72-11.compute-1.amazonaws.com`
 
 Below are a few commands you can run on your control node once you have opened up an ssh connection:
 
@@ -72,7 +52,7 @@ Once you have a custom domain pointing to your JupyterHub, you can implement sec
 
 The final step in enabling HTTPS requires you to ssh into the control node and change the helm chart configuration. Once you ssh into the control node:
 
-`ssh -i "ec2-key.pem" ec2-user@ec2-3-93-72-11.compute-1.amazonaws.com`
+`ssh -i "umsi-easy-hub-test.pem" ec2-user@ec2-3-93-72-11.compute-1.amazonaws.com`
 
 There is a file called `config.yaml`. Uncomment the https section under the proxy settings. 
 
@@ -80,7 +60,7 @@ There is a file called `config.yaml`. Uncomment the https section under the prox
 
 Then re-apply the configuration by running the following command:
 
-`helm upgrade --install jhub jupyterhub/jupyterhub --namespace jhub --version 0.8.2 --values config.yaml`
+`helm upgrade --install jhub jupyterhub/jupyterhub --namespace jhub --version 0.8.2 --values helm_config.yaml`
 
 You should now be able to access your cluster via https.
 

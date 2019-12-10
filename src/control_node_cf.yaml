@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'MADS jupyter hub deployment'
+
+Parameters:
+
+  Tag:
+    Type: String
+    Description: Tag of stack. Used for identification purposes
+
+  BillingTag:
+    Type: String
+    Description: Tag used for billing monitoring
+    Default: jupyterhub
+  
+  ScriptBucket:
+    Type: String
+    Description: Bucket that stores startup scripts used by Cluster instances
+  
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the master and node instances
+    Type: AWS::EC2::KeyPair::KeyName
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:  172.16.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Sub 'umsi-easy-hub-${Tag}-VPC'
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub 'umsi-easy-hub-${Tag}-IGW'
+
+  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub 'umsi-easy-hub-${Tag} Public Subnets'
+      - Key: Network
+        Value: Public
+
+  Route:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet01:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 01
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock: 172.16.64.0/18
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "umsi-easy-hub-${Tag}-Subnet01"
+
+  Subnet02:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 02
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock: 172.16.128.0/18
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "umsi-easy-hub-${Tag}-Subnet02"
+
+  Subnet03:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 03
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock: 172.16.192.0/18
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "umsi-easy-hub-${Tag}-Subnet03"
+
+  Subnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet01
+      RouteTableId: !Ref RouteTable
+
+  Subnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet02
+      RouteTableId: !Ref RouteTable
+
+  Subnet03RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet03
+      RouteTableId: !Ref RouteTable
+  
+  ControlNodeSecurityGroup:
+  # This is a very open SG!!  
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Control node security group
+      VpcId:
+        !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          FromPort: 0
+          ToPort: 65535
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          FromPort: 0
+          ToPort: 65535
+
+  ControlNodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref ControlNodeInstanceRole
+
+  ControlNodeInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      RoleName: !Sub 'umsi-easy-hub-${Tag}-control-node-role'
+  
+  ControlNode:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: "ami-01e3b8c3a51e88954"
+      KeyName: !Ref KeyName
+      InstanceType: t3.medium
+      IamInstanceProfile: !Ref ControlNodeInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: [ !Ref ControlNodeSecurityGroup ]
+          SubnetId: !Ref "Subnet01"
+      Tags:
+      - Key: Purpose
+        Value: !Ref BillingTag
+      - Key: Name
+        Value: !Sub 'umsi-easy-hub-${Tag}-control-node'
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            cd /home/ec2-user/
+
+            # aws s3 cp s3://${ScriptBucket}/autoscale_daemon.py /home/ec2-user/autoscale_daemon.py
+
+            # sudo yum install python37 python37-pip
+
+            chmod +x control_node_startup_script.sh
+
+            su ec2-user -c './control_node_startup_script.sh "${AWS::StackName}" "${Tag}" "${ScriptBucket}"'
+
+Outputs:
+
+  Tag:
+    Description: Tag
+    Value: !Ref Tag
+
+  Subnet01Id:
+    Description: All subnets in the VPC
+    Value: !Ref Subnet01
+  
+  Subnet02Id:
+    Description: All subnets in the VPC
+    Value: !Ref Subnet02
+  
+  Subnet03Id:
+    Description: All subnets in the VPC
+    Value: !Ref Subnet03
+
+  VpcId:
+    Description: The VPC Id
+    Value: !Ref VPC
+
+  KeyName:
+    Description: The name of the ssh key used
+    Value: !Ref KeyName
+  
+  ScriptBucket:
+    Description: The name of the bucket that holds all the scripts
+    Value: !Ref ScriptBucket
+
+  BillingTag:
+    Description: The billing tag
+    Value: !Ref BillingTag
+  
+  ControlNodeSecurityGroup:
+    Description: The control node security group created in this stack
+    Value: !Ref ControlNodeSecurityGroup

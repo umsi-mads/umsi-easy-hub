@@ -21,6 +21,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import argparse
 import math
+import yaml
 
 # Set up logger with rotating log file
 log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
@@ -32,12 +33,18 @@ log = logging.getLogger('root')
 log.setLevel(logging.INFO)
 log.addHandler(my_handler)
 
-# Set up arg parser
-parser = argparse.ArgumentParser()
-parser.add_argument("--asg", "-a", help="name of autoscaling group to manage")
-parser.add_argument("--nodeMem", "-n", help="Gb of memory available on node (int)")
-parser.add_argument("--userMem", "-u", help="Gb of memory to assign to each user (int)")
-parser.add_argument("--availPods", '-p', help="desired open pods on standby (int)")
+def get_pod_configuration():
+    """Open config.yaml and read in pod/autoscaling configuration
+
+    """
+
+    with open("/home/ec2-user/config.yaml", 'r') as f:
+        config = yaml.safe_load(f)
+
+        nodeMem = config['common']['InstanceMemory']
+        userMem = config['common']['UserPodMemory']
+        availPods = config['common']['DesiredBuffer']
+
 
 def parse_nodes_info(node_info):
     """Parse basic node info retreived from kubernetes controller.
@@ -59,8 +66,11 @@ def convert_to_sec(age):
     Keyword arguments:
     age -- age of node in the format of '4d', '6h', '23m', etc.
     """
+
+    age = re.findall('\d+[A-z]')[0]
     num = int(age[0:-1])
     unit = age[-1]
+
     if unit == "s":
         return num
     elif unit == "m":
@@ -139,14 +149,25 @@ if __name__=="__main__":
     # Log initialization to file
     log.info("Initializing autoscaling...")
 
+    # Set up arg parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--asg", "-a", required=True, help="name of autoscaling group to manage")
+
+    # Get node/pod configuration
+    nodeMem, userMem, availPods = get_pod_configuration()
+    log.info(nodeMem, userMem, availPods)
+    nodeMem = "16"
+    userMem = "4"
+    availPods = "1"
+    
     # Get args
     args = parser.parse_args()
 
-    log.info("%s %s %s %s" % (args.asg, args.nodeMem, args.userMem, args.availPods))
+    log.info("%s %s %s %s" % (args.asg, nodeMem, userMem, availPods))
 
     # A node with max number of users is a "full node"
     # max_users is calculated based on 1Gb of overhead services like proxy and hub
-    user_mem_percentage = math.ceil(float(args.userMem) / float(args.nodeMem) * 100)
+    user_mem_percentage = math.ceil(float(userMem) / float(nodeMem) * 100)
     log.info("user_mem_percentage is %s" % user_mem_percentage)
 
     empty_nodes={}
@@ -183,11 +204,11 @@ if __name__=="__main__":
     log.info("available nodes (%s): %s" % (str(len(available_nodes)), str(available_nodes)))
 
     # Decide whether to scale up, scale down, or silent the scale up alarm
-    if total_available_pods < int(args.availPods):
+    if total_available_pods < int(availPods):
         log.info("Not enough available pods. Sending alarm to scale up cluster...")
         subprocess.run(["aws", "cloudwatch", "put-metric-data", "--metric-name", "available-space", "--dimensions", "cluster=%s" % args.asg,  "--namespace", "Custom", "--value", "0"],stdout=subprocess.PIPE).stdout.decode('utf-8')
         log.info("Scale up alarm sent.")
-    elif (total_available_pods - int((100/user_mem_percentage))) >= int(args.availPods) and terminable_empty_node(empty_nodes):
+    elif (total_available_pods - int((100/user_mem_percentage))) >= int(availPods) and terminable_empty_node(empty_nodes):
         log.info("Scaling cluster down...")
         node_to_terminate = terminable_empty_node(empty_nodes)
         terminate_node(node_to_terminate, args.asg)

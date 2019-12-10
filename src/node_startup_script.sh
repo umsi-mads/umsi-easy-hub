@@ -18,7 +18,8 @@ do
 echo $X >> args.txt
 done
 
-BASE_TARGET_GROUP=$1
+AlbTargetGroupHttpArn=$1
+AlbTargetGroupHttpsArn=$2
 
 # Install pythonn3
 sudo amazon-linux-extras install python3 -y
@@ -55,9 +56,6 @@ done
 chmod -R 777 mnt/shared
 
 # Register with aws application load balancer
-ARN_HTTP=$(python3 get_target_group.py "${BASE_TARGET_GROUP}-http")
-echo $ARN_HTTP
-aws elbv2 register-targets --target-group-arn $ARN_HTTP --targets Id=$(curl http://169.254.169.254/latest/meta-data/instance-id),Port=30254 --region us-east-1
-ARN_HTTPS=$(python3 get_target_group.py "${BASE_TARGET_GROUP}-https")
-echo $ARN_HTTPS
-aws elbv2 register-targets --target-group-arn $ARN_HTTPS --targets Id=$(curl http://169.254.169.254/latest/meta-data/instance-id),Port=30255 --region us-east-1
+aws elbv2 register-targets --target-group-arn $AlbTargetGroupHttpArn --targets Id=$(curl http://169.254.169.254/latest/meta-data/instance-id),Port=30254 --region us-east-1
+
+aws elbv2 register-targets --target-group-arn $AlbTargetGroupHttpsArn --targets Id=$(curl http://169.254.169.254/latest/meta-data/instance-id),Port=30255 --region us-east-1

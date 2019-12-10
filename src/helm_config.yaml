@@ -1,3 +1,5 @@
+# This is the config file used by the jupyterhub helmchart
+
 proxy:
   secretToken: ""
   service:

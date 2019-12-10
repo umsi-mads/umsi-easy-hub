@@ -1,0 +1,7 @@
+# This config is used by the autoscale script on the control node. If the node instance type changes,
+# make sure you  change the InstanceMemory accordingly
+
+common:
+  InstanceMemory: 16
+  UserPodMemory: 4
+  DesiredBuffer: 1
