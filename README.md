@@ -6,7 +6,7 @@ The purpose of this project is to provide a one-click deployment of a JupyterHub
 
 ### Prerequisites
 
-These instructions assume that you are familiar with AWS and that your the CLI is configured properly for your AWS account.
+These instructions assume that you are familiar with AWS and that your CLI is configured properly for your AWS account.
 
 Install PyYaml and Boto3 python packages:
 
