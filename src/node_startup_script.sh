@@ -6,6 +6,8 @@ exec > >(tee ~/user-data.log|logger -t user-data ) 2>&1
 
 cd /home/ec2-user/
 
+# You can manually change the value of this if you want a specific EFS 
+# instead of the default EFS created in the Cloudformation
 EFSID="EFSIDREPLACE"
 
 # Sanity check
