@@ -89,3 +89,10 @@ To add in custom notebook profiles beyond the scipy notebook, you have to edit t
 ![Profile Selection Config](images/profile_selection_config.png)
 
 ![Profile Selection](images/profile_selection.png)
+
+### Reusing an old EFS
+
+There are two manual steps you need to complete in order to attach an old EFS to your new JupyterHub cluster. First, log into the AWS console and find the EFS that you would like to use. Remove all of the old mountpoints of the EFS and then add new mountpoints in the same Vpc/Subnets that your new JupyterHub is in. Once the EFS has mountpoints in the proper subnets, it can be discoverable by the nodes in your cluster. The second step is to edit the node startup script. First take note of the File System ID of your EFS. Then go to the S3 bucket that holds all of the source files of your hub (for example `s3://1234567890-umsi-easy-hub-test`) and change the value in `node_startup_script.sh` that assigns the EFSID. Then terminate all your nodes (not the control node) and when they reboot, they will mount the new EFS.
+
+
+For further questions and configurations, please contact myself (millergd@umich.edu) or the MADS Tech team (mads-tech@umich.edu)
