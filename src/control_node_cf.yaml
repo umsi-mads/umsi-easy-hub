@@ -200,6 +200,7 @@ Resources:
 
             # sudo yum install python37 python37-pip
 
+            aws s3 cp s3://${ScriptBucket}/control_node_startup_script.sh .
             chmod +x control_node_startup_script.sh
 
             su ec2-user -c './control_node_startup_script.sh "${AWS::StackName}" "${Tag}" "${ScriptBucket}"'
