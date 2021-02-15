@@ -14,11 +14,11 @@ Parameters:
   Subnet01Id:
     Type: String
     Description: Id of subnet 01
-  
+
   Subnet02Id:
     Type: String
     Description: Id of subnet 02
-  
+
   Subnet03Id:
     Type: String
     Description: Id of subnet 03
@@ -27,11 +27,11 @@ Parameters:
     Type: String
     Description: Tag used for billing monitoring
     Default: jupyterhub
-  
+
   ScriptBucket:
     Type: String
     Description: Bucket that stores startup scripts used by Cluster instances
-  
+
   ControlNodeSecurityGroup:
     Type: AWS::EC2::SecurityGroup::Id
     Description: Security groud of control node
@@ -40,41 +40,41 @@ Parameters:
     Type: String
     Description: Default port to forward http traffic to on the nodes
     Default: 30254
-  
+
   DefaultAlbForwardPortHttps:
     Type: String
     Description: Default port to forward https traffic to on the nodes
     Default: 30255
-  
+
   ScaleOutPolicyTargetValue:
     Type: Number
     Description: Target average cpu utilization for cluster nodes
     Default: 60
-  
+
   KeyName:
     Description: The EC2 Key Pair to allow SSH access to the master and node instances
     Type: AWS::EC2::KeyPair::KeyName
-  
+
   NodeImageId:
     Type: AWS::EC2::Image::Id
     Description: AMI id for the node instances.
     Default: "ami-0c24db5df6badc35a"
-  
+
   NodeInstanceType:
     Description: EC2 instance type for the node instances
     Type: String
     Default: t3.xlarge
-  
+
   NodeInstanceMem:
     Description: EC2 instance memory (in Gb)
     Type: Number
     Default: 16
-  
+
   UserPodMem:
     Description: Amount of memory to assign to each user pod
     Type: Number
     Default: 4
-  
+
   DesiredPodBuffer:
     Description: Amount of pods on standby ready to take users
     Type: Number
@@ -106,7 +106,7 @@ Parameters:
     Type: String
 
 Resources:
-  
+
   EFS:
     Type: AWS::EFS::FileSystem
     DeletionPolicy: Retain
@@ -114,7 +114,7 @@ Resources:
       FileSystemTags:
         - Key: Name
           Value: !Sub umsi-easy-hub-${Tag}-efs
-  
+
   Subnet01EfsMountTarget:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -125,7 +125,7 @@ Resources:
       SecurityGroups:
         - Ref: ControlNodeSecurityGroup
         - Ref: NodeSecurityGroup
-  
+
   Subnet02EfsMountTarget:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -136,7 +136,7 @@ Resources:
       SecurityGroups:
         - Ref: ControlNodeSecurityGroup
         - Ref: NodeSecurityGroup
-  
+
   Subnet03EfsMountTarget:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -180,7 +180,7 @@ Resources:
   #         Ref: Alb
   #     Port: 443
   #     Protocol: HTTPS
-  
+
   AlbListenerHttp:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -188,11 +188,11 @@ Resources:
         - Type: forward
           TargetGroupArn:
             Ref: AlbTargetGroupHttp
-      LoadBalancerArn: 
+      LoadBalancerArn:
           Ref: Alb
       Port: 80
       Protocol: HTTP
-  
+
   AlbTargetGroupHttps:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -204,7 +204,7 @@ Resources:
       Protocol: HTTPS
       VpcId:
         Ref: VpcId
-  
+
   AlbTargetGroupHttp:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -233,7 +233,7 @@ Resources:
     Properties:
       GroupDescription: Cluster communication with worker nodes
       VpcId: !Ref VpcId
-  
+
   ControlPlaneSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn: NodeSecurityGroup
@@ -244,7 +244,7 @@ Resources:
       IpProtocol: tcp
       ToPort: 443
       FromPort: 443
-  
+
   ControlPlaneEgressToNodeSecurityGroup:
     Type: AWS::EC2::SecurityGroupEgress
     DependsOn: NodeSecurityGroup
@@ -255,7 +255,7 @@ Resources:
       IpProtocol: tcp
       FromPort: 1025
       ToPort: 65535
-  
+
   ControlPlaneEgressToNodeSecurityGroupOn443:
     Type: AWS::EC2::SecurityGroupEgress
     DependsOn: NodeSecurityGroup
@@ -284,10 +284,10 @@ Resources:
       - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
       - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
       RoleName: !Sub '${AWS::StackName}-eks-control-plane-role'
-  
+
   EksCluster:
     Type: "AWS::EKS::Cluster"
-    DependsOn: 
+    DependsOn:
     - EksControlPlaneRole
     - ControlPlaneSecurityGroup
     Properties:
@@ -339,7 +339,7 @@ Resources:
             Effect: "Allow"
             Action:
               - "elasticloadbalancing:*"
-            Resource: "*" 
+            Resource: "*"
       Roles:
         -
           Ref: NodeInstanceRole
@@ -349,11 +349,11 @@ Resources:
     Properties:
       GroupDescription: Security group for all nodes in the cluster
       VpcId:
-        !Ref VpcId  
+        !Ref VpcId
       Tags:
       - Key: !Sub "kubernetes.io/cluster/umsi-easy-hub-${Tag}-EksCluster"
         Value: 'owned'
-  
+
   NodeSecurityGroupMasterElbIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn: NodeSecurityGroup
@@ -364,7 +364,7 @@ Resources:
       IpProtocol: '-1'
       FromPort: 0
       ToPort: 65535
-  
+
   NodeSecurityGroupControlNodeIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn: NodeSecurityGroup
@@ -375,7 +375,7 @@ Resources:
       IpProtocol: '-1'
       FromPort: 0
       ToPort: 65535
-  
+
   NodeSecurityGroupElbIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -385,7 +385,7 @@ Resources:
       IpProtocol: '-1'
       FromPort: 0
       ToPort: 65535
-  
+
   NodeSecurityGroupFromControlPlaneIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn: NodeSecurityGroup
@@ -396,7 +396,7 @@ Resources:
       IpProtocol: tcp
       FromPort: 1025
       ToPort: 65535
-  
+
   NodeSecurityGroupFromControlPlaneOn443Ingress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn: NodeSecurityGroup
@@ -450,7 +450,7 @@ Resources:
       Statistic: Minimum
       Threshold: 1
       Namespace: Custom
-  
+
   ScaleOutPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -486,7 +486,7 @@ Resources:
                      --stack  ${AWS::StackName} \
                      --resource NodeAsg  \
                      --region ${AWS::Region}
-            
+
             cd /home/ec2-user/
 
             aws s3 cp s3://${ScriptBucket}/node_startup_script.sh node_startup_script.sh
@@ -504,15 +504,15 @@ Outputs:
   Tag:
     Description: Tag
     Value: !Ref Tag
-  
+
   EksName:
     Description: Name of EKS backplane
     Value: !Sub umsi-easy-hub-${Tag}-EksCluster
-  
+
   NodeRoleArn:
     Description: ARN of node role
     Value: !GetAtt NodeInstanceRole.Arn
-  
+
   Asg:
     Description: Name of the autoscaling group created
     Value: !Ref NodeAsg
