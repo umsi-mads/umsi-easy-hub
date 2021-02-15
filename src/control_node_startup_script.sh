@@ -15,7 +15,6 @@ done
 STACK_NAME=$1
 TAG=$2
 SCRIPT_BUCKET=$3
-JUPYTERHUB_IMAGE="jupyterhub/jupyterhub"
 
 # Ensure you are in the home directory of ec2-user
 cd /home/ec2-user/
@@ -85,14 +84,8 @@ curl -O https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2019-01-09/
 sed -i -e "s;<ARN of instance role (not instance profile)>;${output[2]};g" aws-auth-cm.yaml
 kubectl apply -f aws-auth-cm.yaml
 
-# Install tiller role to apply helm charts
-curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
-kubectl --namespace kube-system create serviceaccount tiller
-kubectl create clusterrolebinding tiller --clusterrole cluster-admin --serviceaccount=kube-system:tiller
-helm init --service-account tiller
-
-# Sleep because sometimes it takes a while for the tiller pod to initialize
-sleep 2m
+# Install Helm per https://helm.sh/docs/intro/install/
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
 # Generate hex key for helm config
 python3 generate_hex.py
@@ -105,6 +98,7 @@ helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
 helm repo update
 export RELEASE=jhub
 export NAMESPACE=jhub
+JUPYTERHUB_IMAGE="jupyterhub/jupyterhub"
 helm upgrade --install $RELEASE $JUPYTERHUB_IMAGE --namespace $NAMESPACE --version 0.8.2 --values helm_config.yaml
 
 # Add in autoscaler
