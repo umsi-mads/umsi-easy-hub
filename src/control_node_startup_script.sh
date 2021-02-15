@@ -30,11 +30,14 @@ aws s3 cp s3://${SCRIPT_BUCKET}/control_node_startup_script.sh .
 aws s3 cp s3://${SCRIPT_BUCKET}/cluster_cf.yaml .
 aws s3 cp s3://${SCRIPT_BUCKET}/deploy_cluster_cf.py .
 aws s3 cp s3://${SCRIPT_BUCKET}/autoscale_daemon.py .
-aws s3 cp s3://${SCRIPT_BUCKET}/umsi-easy-hub-${TAG}.pem .
 aws s3 cp s3://${SCRIPT_BUCKET}/generate_hex.py .
 aws s3 cp s3://${SCRIPT_BUCKET}/set_pod_memory.py .
 aws s3 cp s3://${SCRIPT_BUCKET}/get_cluster_cf_output.py .
 aws s3 cp s3://${SCRIPT_BUCKET}/helm_config.yaml .
+
+# Fetch the SSH key from the secret store
+aws secretsmanager get-secret-value --secret-id umsi-easy-hub-${TAG}.pem \
+  --query SecretString --output text > umsi-easy-hub-${TAG}.pem
 
 # Install packages
 sudo yum install python37 python37-pip -y
