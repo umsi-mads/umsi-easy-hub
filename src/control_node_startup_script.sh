@@ -36,7 +36,7 @@ aws s3 cp s3://${SCRIPT_BUCKET}/helm_config.yaml .
 
 # Fetch the SSH key from the secret store
 aws secretsmanager get-secret-value --secret-id umsi-easy-hub-${TAG}.pem \
-  --query SecretString --output text > umsi-easy-hub-${TAG}.pem
+  --query SecretString --output text --region us-east-1 > umsi-easy-hub-${TAG}.pem
 
 # Install packages
 sudo yum install python37 python37-pip -y
@@ -99,6 +99,7 @@ helm repo update
 export RELEASE=jhub
 export NAMESPACE=jhub
 JUPYTERHUB_IMAGE="jupyterhub/jupyterhub"
+kubectl create namespace $NAMESPACE
 helm upgrade --install $RELEASE $JUPYTERHUB_IMAGE --namespace $NAMESPACE --version 0.8.2 --values helm_config.yaml
 
 # Add in autoscaler
