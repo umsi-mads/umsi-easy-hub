@@ -41,21 +41,6 @@ def generate_ssh_key(config):
     # Only owner can only read
     os.chmod(name, stat.S_IREAD)
 
-    try:
-        secrets.get_secret_value(SecretId = name)
-        secrets.update_secret(
-            SecretId = name,
-            SecretString = response['KeyMaterial']
-        )
-        print("Updated key {} in Secrets Manager".format(name))
-    except:
-        boto3.client('secretsmanager').create_secret(
-            Name = name,
-            Description = "SSH key for {} cluster".format(config['project']),
-            SecretString = response['KeyMaterial']
-        )
-        print("Created key {} and saved to Secrets Manager".format(name))
-
     return response['KeyName']
 
 # Create the S3 bucket that will centrally store scripts used throughout the deployment process
@@ -107,6 +92,9 @@ def create_control_node(config):
             },
             {
                 'ParameterKey': 'Tag', 'ParameterValue': config['tag'], 'UsePreviousValue': False
+            },
+            {
+                'ParameterKey': 'PrivateKey', 'ParameterValue': open(config['ssh_key_name']+'.pem', 'r').read(), 'UsePreviousValue': False
             }
         ],
         Capabilities=[
@@ -133,6 +121,12 @@ if __name__ == "__main__":
                         default = "umsi-easy-hub",
                         help="name of project, used in all AWS resources")
 
+    parser.add_argument("--wait", "-w",
+                        required=False,
+                        default=False,
+                        action='store_true',
+                        help="wait until the control node has completed and display it's public IP address")
+
     args = parser.parse_args()
 
     if args.project != "umsi-easy-hub":
@@ -157,3 +151,17 @@ if __name__ == "__main__":
 
     # Finally, deploy the control node cloudformation
     create_control_node(config)
+
+    if args.wait:
+        print("Waiting for your cloudformation to finish contructing")
+        boto3.client('cloudformation').get_waiter('stack_create_complete').wait(StackName='umsi-easy-hub-shreve-control-node')
+        outputs = boto3.resource('cloudformation').Stack('umsi-easy-hub-shreve-control-node').outputs
+
+        instance = next((x for x in outputs if x['OutputKey'] == 'Instance'), None)
+
+        if instance:
+            print("Connect to your control node: ssh -i {} ec2-user@{}".format(
+                config['ssh_key_name'],
+                boto3.resource('ec2').Instance(instance['OutputValue']).public_ip_address
+            ))
+

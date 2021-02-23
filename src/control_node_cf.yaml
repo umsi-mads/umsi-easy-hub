@@ -20,6 +20,10 @@ Parameters:
     Description: The EC2 Key Pair to allow SSH access to the master and node instances
     Type: AWS::EC2::KeyPair::KeyName
 
+  PrivateKey:
+    Type: String
+    Description: The contents of the private SSH key
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -205,6 +209,16 @@ Resources:
 
             su ec2-user -c './control_node_startup_script.sh "${AWS::StackName}" "${Tag}" "${ScriptBucket}"'
 
+  SSHKey:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: !Sub "${KeyName}.pem"
+      SecretString: !Ref PrivateKey
+      Description: !Sub "SSH Key for the ${AWS::StackName} CloudFormation stack"
+      Tags:
+      - Key: Purpose
+        Value: !Ref BillingTag
+
 Outputs:
 
   Tag:
@@ -242,3 +256,7 @@ Outputs:
   ControlNodeSecurityGroup:
     Description: The control node security group created in this stack
     Value: !Ref ControlNodeSecurityGroup
+
+  Instance:
+    Description: The control node instance
+    Value: !Ref ControlNode
