@@ -1,5 +1,5 @@
-# This script deploys the control node cloudformation, which will then automatically deploy and configure the cluster
-# cloudformation and kubernetes deployment.
+# This script deploys the control node CloudFormation, which will then automatically deploy and configure the cluster
+# CloudFormation and kubernetes deployment.
 
 import os, stat, sys
 import boto3
@@ -8,28 +8,16 @@ import argparse
 import json
 from shutil import copyfile
 import yaml
+import time
 
 # This should never have to change. This is used in tagging/identifying all aws resources
 project = "umsi-easy-hub"
 
 secrets = boto3.client('secretsmanager')
 
-# Loads from config.yaml. Currently, nothing from this file is actually needed at this point.
-def load_config(tag="dev"):
-    config = {}
-    with open("config.yaml", 'r') as f:
-        config = yaml.safe_load(f)
-        config = {**config['common']}
-        print(config)
-        for c in config:
-            if config[c] is None or config[c] == "":
-                raise Exception("Error. {} does not have a valid value")
-
-    return config
-
 # Generate a new ssh key that will be used for all nodes throughout the deployment
 def generate_ssh_key(config):
-    """Generate an SSH key pair from EC2 and save it to Secrets Manager."""
+    """Generate an SSH key pair from EC2."""
     ec2 = boto3.client('ec2')
     response = ec2.create_key_pair(KeyName='{}-{}'.format(config['project'], config['tag']))
 
@@ -68,7 +56,7 @@ def upload_cluster_scripts(config):
         print(filename)
         s3_resource.meta.client.upload_file('src/' + filename, get_bucket_name(config), filename)
 
-# Deploy the control node cloudformation
+# Deploy the control node CloudFormation
 def create_control_node(config):
 
     cf = boto3.client('cloudformation')
@@ -92,16 +80,24 @@ def create_control_node(config):
             },
             {
                 'ParameterKey': 'Tag', 'ParameterValue': config['tag'], 'UsePreviousValue': False
-            },
-            {
-                'ParameterKey': 'PrivateKey', 'ParameterValue': open(config['ssh_key_name']+'.pem', 'r').read(), 'UsePreviousValue': False
             }
         ],
         Capabilities=[
             'CAPABILITY_NAMED_IAM'
         ],
     )
-    print("deployed stack!")
+    print("Uploaded deployment spec. CloudFormation will take it from here.")
+
+def upload_ssh_key(key_name):
+    id = "{}.pem".format(key_name)
+    while True:
+        try:
+            secrets.describe_secret(SecretId=id)
+            break
+        except:
+            time.sleep(0.25)
+    secrets.update_secret(SecretId=id, SecretString=open(id, 'r').read())
+    print("Uploaded SSH key.")
 
 def fail(msg):
     print(msg)
@@ -149,11 +145,15 @@ if __name__ == "__main__":
     # Upload all files in src/ to the bucket
     upload_cluster_scripts(config)
 
-    # Finally, deploy the control node cloudformation
+    # Finally, deploy the control node CloudFormation
     create_control_node(config)
 
-    if args.wait:
-        print("Waiting for your cloudformation to finish contructing")
+    upload_ssh_key(config['ssh_key_name'])
+
+    if not args.wait:
+        print("Deployment finished! Watch CloudFormation for details.")
+    else:
+        print("Waiting for your CloudFormation to finish contructing")
         boto3.client('cloudformation').get_waiter('stack_create_complete').wait(StackName='umsi-easy-hub-shreve-control-node')
         outputs = boto3.resource('cloudformation').Stack('umsi-easy-hub-shreve-control-node').outputs
 

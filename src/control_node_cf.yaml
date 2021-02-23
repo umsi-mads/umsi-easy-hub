@@ -20,10 +20,6 @@ Parameters:
     Description: The EC2 Key Pair to allow SSH access to the master and node instances
     Type: AWS::EC2::KeyPair::KeyName
 
-  PrivateKey:
-    Type: String
-    Description: The contents of the private SSH key
-
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -213,7 +209,7 @@ Resources:
     Type: "AWS::SecretsManager::Secret"
     Properties:
       Name: !Sub "${KeyName}.pem"
-      SecretString: !Ref PrivateKey
+      SecretString: "not yet uploaded"
       Description: !Sub "SSH Key for the ${AWS::StackName} CloudFormation stack"
       Tags:
       - Key: Purpose
