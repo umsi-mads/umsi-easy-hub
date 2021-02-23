@@ -52,6 +52,9 @@ def get_bucket_name(config):
     """Generate the name of the S3 bucket."""
     return "{}-{}-{}".format(config['account_id'], config['project'], config['tag'])
 
+def stack_name(config):
+    """Generate the name of the CloudFormation stack."""
+    return '{}-{}-control-node'.format(config['project'], config['tag'])
 
 def upload_cluster_scripts(config):
     """Upload the src/ folder to the s3 bucket."""
@@ -72,9 +75,8 @@ def create_control_node(config):
     cf.validate_template(TemplateBody=template_data)
 
     response = cf.create_stack(
-        StackName='{}-{}-control-node'.format(
-            config['project'], config['tag']),
         TemplateBody=template_data,
+        StackName=stack_name(config),
         Parameters=[
             {
                 'ParameterKey': 'BillingTag', 'ParameterValue': '{}-{}'.format(config['project'], config['tag']), 'UsePreviousValue': False
@@ -166,11 +168,11 @@ if __name__ == "__main__":
     if not args.wait:
         print("Deployment finished! Watch CloudFormation for details.")
     else:
+        name = stack_name(config)
         print("Waiting for your CloudFormation to finish contructing")
         boto3.client('cloudformation').get_waiter('stack_create_complete').wait(
-            StackName='umsi-easy-hub-shreve-control-node')
-        outputs = boto3.resource('cloudformation').Stack(
-            'umsi-easy-hub-shreve-control-node').outputs
+            StackName=name)
+        outputs = boto3.resource('cloudformation').Stack(name).outputs
 
         instance = next(
             (x for x in outputs if x['OutputKey'] == 'Instance'), None)
