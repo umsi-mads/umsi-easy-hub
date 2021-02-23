@@ -24,15 +24,7 @@ export HOME=/home/ec2-user/
 export PATH=/usr/local/bin/:$PATH && echo "export PATH=/usr/local/bin/:$PATH" >> ~/.bashrc
 
 # Download files from s3
-aws s3 cp s3://${SCRIPT_BUCKET}/config.yaml .
-aws s3 cp s3://${SCRIPT_BUCKET}/control_node_startup_script.sh .
-aws s3 cp s3://${SCRIPT_BUCKET}/cluster_cf.yaml .
-aws s3 cp s3://${SCRIPT_BUCKET}/deploy_cluster_cf.py .
-aws s3 cp s3://${SCRIPT_BUCKET}/autoscale_daemon.py .
-aws s3 cp s3://${SCRIPT_BUCKET}/generate_hex.py .
-aws s3 cp s3://${SCRIPT_BUCKET}/set_pod_memory.py .
-aws s3 cp s3://${SCRIPT_BUCKET}/get_cluster_cf_output.py .
-aws s3 cp s3://${SCRIPT_BUCKET}/helm_config.yaml .
+aws s3 cp --recursive s3://${SCRIPT_BUCKET}/ .
 
 # Fetch the SSH key from the secret store
 aws secretsmanager get-secret-value --secret-id umsi-easy-hub-${TAG}.pem \
