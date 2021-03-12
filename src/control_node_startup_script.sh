@@ -91,6 +91,8 @@ helm repo update
 export RELEASE=jhub
 export NAMESPACE=jhub
 JUPYTERHUB_IMAGE="jupyterhub/jupyterhub"
+
+# Create namespace because helm expects it to exist already.
 kubectl create namespace $NAMESPACE
 helm upgrade --install $RELEASE $JUPYTERHUB_IMAGE --namespace $NAMESPACE --version 0.8.2 --values helm_config.yaml
 

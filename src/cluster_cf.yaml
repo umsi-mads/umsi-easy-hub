@@ -292,7 +292,7 @@ Resources:
     - ControlPlaneSecurityGroup
     Properties:
       Name: !Sub "umsi-easy-hub-${Tag}-EksCluster"
-      # Can we just reference the role from above?
+      Version: "1.19"
       RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-eks-control-plane-role"
       ResourcesVpcConfig:
         SecurityGroupIds: [!Ref ControlPlaneSecurityGroup]
