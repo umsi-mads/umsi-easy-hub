@@ -11,11 +11,11 @@ Parameters:
     Type: String
     Description: Tag used for billing monitoring
     Default: jupyterhub
-  
+
   ScriptBucket:
     Type: String
     Description: Bucket that stores startup scripts used by Cluster instances
-  
+
   KeyName:
     Description: The EC2 Key Pair to allow SSH access to the master and node instances
     Type: AWS::EC2::KeyPair::KeyName
@@ -130,9 +130,9 @@ Resources:
     Properties:
       SubnetId: !Ref Subnet03
       RouteTableId: !Ref RouteTable
-  
+
   ControlNodeSecurityGroup:
-  # This is a very open SG!!  
+  # This is a very open SG!!
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: Control node security group
@@ -172,7 +172,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
       RoleName: !Sub 'umsi-easy-hub-${Tag}-control-node-role'
-  
+
   ControlNode:
     Type: "AWS::EC2::Instance"
     Properties:
@@ -205,6 +205,16 @@ Resources:
 
             su ec2-user -c './control_node_startup_script.sh "${AWS::StackName}" "${Tag}" "${ScriptBucket}"'
 
+  SSHKey:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: !Sub "${KeyName}.pem"
+      SecretString: "not yet uploaded"
+      Description: !Sub "SSH Key for the ${AWS::StackName} CloudFormation stack"
+      Tags:
+      - Key: Purpose
+        Value: !Ref BillingTag
+
 Outputs:
 
   Tag:
@@ -214,11 +224,11 @@ Outputs:
   Subnet01Id:
     Description: All subnets in the VPC
     Value: !Ref Subnet01
-  
+
   Subnet02Id:
     Description: All subnets in the VPC
     Value: !Ref Subnet02
-  
+
   Subnet03Id:
     Description: All subnets in the VPC
     Value: !Ref Subnet03
@@ -230,7 +240,7 @@ Outputs:
   KeyName:
     Description: The name of the ssh key used
     Value: !Ref KeyName
-  
+
   ScriptBucket:
     Description: The name of the bucket that holds all the scripts
     Value: !Ref ScriptBucket
@@ -238,7 +248,11 @@ Outputs:
   BillingTag:
     Description: The billing tag
     Value: !Ref BillingTag
-  
+
   ControlNodeSecurityGroup:
     Description: The control node security group created in this stack
     Value: !Ref ControlNodeSecurityGroup
+
+  Instance:
+    Description: The control node instance
+    Value: !Ref ControlNode

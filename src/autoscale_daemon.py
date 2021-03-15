@@ -45,6 +45,8 @@ def get_pod_configuration():
         userMem = config['common']['UserPodMemory']
         availPods = config['common']['DesiredBuffer']
 
+        return (nodeMem, userMem, availPods)
+
 
 def parse_nodes_info(node_info):
     """Parse basic node info retreived from kubernetes controller.
@@ -67,7 +69,7 @@ def convert_to_sec(age):
     age -- age of node in the format of '4d', '6h', '23m', etc.
     """
 
-    age = re.findall('\d+[A-z]')[0]
+    age = re.findall('\d+[A-z]', age)[0]
     num = int(age[0:-1])
     unit = age[-1]
 
@@ -118,12 +120,12 @@ def terminable_empty_node(empty_nodes):
     """
     if len(empty_nodes) == 0:
         return False
-    
+
     for node in empty_nodes:
         if empty_nodes[node]['age'] >= (60 * 60):
             log.info("Terminable node: %s " % str(empty_nodes[node]))
             return node
-    
+
     log.info("No terminable nodes")
     return False
 
@@ -141,7 +143,7 @@ def terminate_node(node_name, asg):
     subprocess.run(['aws', 'ec2', 'terminate-instances', '--instance-ids', instance_id])
 
 if __name__=="__main__":
-    
+
     # Add necessary executables (such as aws binary) to path of root user that calls this file in crontab
     my_env = os.environ
     my_env["PATH"] = "/usr/local/bin:" + my_env["PATH"]
@@ -155,11 +157,11 @@ if __name__=="__main__":
 
     # Get node/pod configuration
     nodeMem, userMem, availPods = get_pod_configuration()
-    log.info(nodeMem, userMem, availPods)
+    log.info("nodeMem: {}, userMem: {}, availPods: {}".format(nodeMem, userMem, availPods))
     nodeMem = "16"
     userMem = "4"
     availPods = "1"
-    
+
     # Get args
     args = parser.parse_args()
 
@@ -196,7 +198,7 @@ if __name__=="__main__":
             total_available_pods += num_available_pods
             if node_is_empty(node_data):
                 empty_nodes[node] = nodes[node]
-    
+
     # Log results of sorting
     log.info("total available pods: " + str(total_available_pods))
     log.info("empty nodes (%s): %s" % (str(len(empty_nodes)), str(empty_nodes)))

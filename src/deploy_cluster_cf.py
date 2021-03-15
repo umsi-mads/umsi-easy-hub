@@ -35,7 +35,7 @@ def get_cf_output(config):
     output = {}
     for item in response['Stacks'][0]['Outputs']:
         output[item['OutputKey']] = item['OutputValue']
-    
+
     config.update(output)
     # config['tag'] = 'test'
 
