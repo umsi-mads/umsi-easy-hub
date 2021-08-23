@@ -185,11 +185,16 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: forward
-          TargetGroupArn:
-            Ref: AlbTargetGroupHttp
+        - Type: redirect
+          RedirectConfig:
+            Protocol: "HTTPS"
+            Port: 443
+            Host: "#{host}"
+            Path: "/#{path}"
+            Query: "#{query}"
+            StatusCode: "HTTP_301"
       LoadBalancerArn:
-          Ref: Alb
+        Ref: Alb
       Port: 80
       Protocol: HTTP
 
