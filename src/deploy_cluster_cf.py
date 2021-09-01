@@ -41,6 +41,18 @@ def get_cf_output(config):
 
     return config
 
+
+def find_hosted_zone(config):
+
+    name = '.'.join(config['Domain'].split('.')[-2:]) + '.'
+
+    for zone in boto3.client('route53').list_hosted_zones()['HostedZones']:
+        if name == zone['Name']:
+            config['HostedZoneId'] = zone['Id'].split('/')[-1]
+
+    return config
+
+
 # Deploy the cluster cloudformation using the boto client
 def create_cluster(config):
 
@@ -80,6 +92,12 @@ def create_cluster(config):
             },
             {
                 'ParameterKey': 'ControlNodeSecurityGroup', 'ParameterValue': config['ControlNodeSecurityGroup'], 'UsePreviousValue': False
+            },
+            {
+                'ParameterKey': 'Domain', 'ParameterValue': config['Domain'], 'UsePreviousValue': False
+            },
+            {
+                'ParameterKey': 'HostedZoneId', 'ParameterValue': config['HostedZoneId'], 'UsePreviousValue': False
             }
         ],
         Capabilities=[
@@ -107,6 +125,8 @@ if __name__ == "__main__":
     config = get_cf_output(config)
 
     config = load_config(config)
+
+    config = find_hosted_zone(config)
 
     print(config)
 

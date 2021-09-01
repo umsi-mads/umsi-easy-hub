@@ -20,6 +20,10 @@ Parameters:
     Description: The EC2 Key Pair to allow SSH access to the master and node instances
     Type: AWS::EC2::KeyPair::KeyName
 
+  Domain:
+    Description: FQDN which this hub will be hosted on
+    Type: String
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -256,3 +260,7 @@ Outputs:
   Instance:
     Description: The control node instance
     Value: !Ref ControlNode
+
+  Domain:
+    Description: FQDN which this hub will be hosted on
+    Value: !Ref Domain

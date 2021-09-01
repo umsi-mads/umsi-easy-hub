@@ -105,6 +105,14 @@ Parameters:
     Default: ""
     Type: String
 
+  Domain:
+    Description: FQDN which this hub will be hosted on
+    Type: String
+
+  HostedZoneId:
+    Description: ID of the hosted zone which contains the Domain
+    Type: String
+
 Resources:
 
   EFS:
@@ -148,6 +156,25 @@ Resources:
         - Ref: ControlNodeSecurityGroup
         - Ref: NodeSecurityGroup
 
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref Domain
+      HostedZoneId: !Ref HostedZoneId
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+        DNSName: !GetAtt Alb.DNSName
+
+  DomainCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref Domain
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref Domain
+          HostedZoneId: !Ref HostedZoneId
+
   AlbSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -168,18 +195,18 @@ Resources:
         ToPort: 65535
         CidrIp: 0.0.0.0/0
 
-  # AlbListenerHttps:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     Certificates: [ CertificateArn: !Ref DomainCertificateArn]
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn:
-  #           Ref: AlbTargetGroupHttps
-  #     LoadBalancerArn:
-  #         Ref: Alb
-  #     Port: 443
-  #     Protocol: HTTPS
+  AlbListenerHttps:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates: [ CertificateArn: !Ref DomainCertificate]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: AlbTargetGroupHttps
+      LoadBalancerArn:
+          Ref: Alb
+      Port: 443
+      Protocol: HTTPS
 
   AlbListenerHttp:
     Type: AWS::ElasticLoadBalancingV2::Listener
