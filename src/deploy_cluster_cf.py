@@ -49,6 +49,7 @@ def find_hosted_zone(config):
     for zone in boto3.client('route53').list_hosted_zones()['HostedZones']:
         if name == zone['Name']:
             config['HostedZoneId'] = zone['Id'].split('/')[-1]
+            break
 
     return config
 
