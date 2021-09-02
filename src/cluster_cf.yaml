@@ -237,6 +237,18 @@ Resources:
       VpcId:
         Ref: VpcId
 
+  AlbTargetGroupHttp:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub ueh-${Tag}-target-group-http
+      Port: !Ref DefaultAlbForwardPortHttp
+      Protocol: HTTP
+      VpcId:
+        Ref: VpcId
+
   Alb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
