@@ -27,4 +27,4 @@ for item in response['Stacks'][0]['Outputs']:
 
 # print(output)
 
-print(output['Tag'], output['EksName'], output['NodeRoleArn'], output['Asg'])
+print(output['EksName'], output['NodeRoleArn'], output['Asg'])

@@ -1,6 +1,7 @@
 import boto3
 import argparse
 import yaml
+import pprint
 
 # Still need to add logging!!!
 # Currently, the print statements should be caught by the control_node_startup_script.sh logger
@@ -30,14 +31,11 @@ def get_cf_output(config):
         StackName=config['ControlNodeStackname']
     )
 
-    print(response)
-
     output = {}
     for item in response['Stacks'][0]['Outputs']:
         output[item['OutputKey']] = item['OutputValue']
 
     config.update(output)
-    # config['tag'] = 'test'
 
     return config
 
@@ -129,7 +127,8 @@ if __name__ == "__main__":
 
     config = find_hosted_zone(config)
 
-    print(config)
+    print("Creating cluster with the following config:")
+    pprint.pprint(config)
 
     # Now deploy the cluster cloudformation
     create_cluster(config)
