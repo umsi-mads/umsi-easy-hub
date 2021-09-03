@@ -4,7 +4,7 @@
 # This is an unfinished script that will delete the cluster cloudformation along with any other loose ends
 # Execute it with a tag to identify which cluster to delete such as "./clean.sh tag"
 
-if grep '^[-0-9a-zA-Z]*$' <<<$1 && [ ! -z "$1" ];
+if grep '^[-0-9a-zA-Z]*$' <<< "$1" && [ -n "$1" ];
   then echo "Tag is valid";
   else echo "Tag must be alphanumeric." && exit 1;
 fi
