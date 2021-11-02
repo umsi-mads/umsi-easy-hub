@@ -55,7 +55,7 @@ output=($(python3 get_cluster_cf_output.py --cluster-stackname "umsi-easy-hub-${
 # ${output[3]} = Asg
 
 # Get kubectl binary which will expose control plane configuration options
-curl -o kubectl https://amazon-eks.s3-us-west-2.amazonaws.com/1.11.5/2018-12-06/bin/linux/amd64/kubectl
+curl -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.21.2/2021-07-05/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 sudo cp ./kubectl /usr/local/bin/kubectl
 
