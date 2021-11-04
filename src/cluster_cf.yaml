@@ -58,7 +58,7 @@ Parameters:
   NodeImageId:
     Type: AWS::EC2::Image::Id
     Description: AMI id for the node instances.
-    Default: "ami-0c24db5df6badc35a"
+    Default: "ami-0c385d0d99fce057d"
 
   NodeInstanceType:
     Description: EC2 instance type for the node instances
@@ -292,7 +292,7 @@ Resources:
     - ControlPlaneSecurityGroup
     Properties:
       Name: !Sub "umsi-easy-hub-${Tag}-EksCluster"
-      Version: "1.19"
+      Version: "1.21"
       RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-eks-control-plane-role"
       ResourcesVpcConfig:
         SecurityGroupIds: [!Ref ControlPlaneSecurityGroup]
