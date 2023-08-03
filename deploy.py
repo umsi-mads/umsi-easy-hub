@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # This script deploys the control node CloudFormation, which will then
 # automatically deploy and configure the cluster CloudFormation and kubernetes
 # deployment.
@@ -20,6 +22,7 @@ project = "umsi-easy-hub"
 secrets = boto3.client('secretsmanager')
 s3 = boto3.client('s3')
 cloudformation = boto3.client('cloudformation')
+
 
 def generate_ssh_key(config):
     """Generate an SSH key pair from EC2."""
@@ -74,7 +77,7 @@ def create_control_node(config):
         template_data = template_fileobj.read()
     cloudformation.validate_template(TemplateBody=template_data)
 
-    response = cloudformation.create_stack(
+    cloudformation.create_stack(
         TemplateBody=template_data,
         StackName=stack_name(config),
         Parameters=[{'ParameterKey': 'BillingTag',
@@ -86,6 +89,9 @@ def create_control_node(config):
                      'UsePreviousValue': False},
                     {'ParameterKey': 'KeyName',
                      'ParameterValue': config['ssh_key_name'],
+                     'UsePreviousValue': False},
+                    {'ParameterKey': 'Domain',
+                     'ParameterValue': config['domain'],
                      'UsePreviousValue': False},
                     {'ParameterKey': 'Tag',
                      'ParameterValue': config['tag'],
@@ -125,6 +131,11 @@ if __name__ == "__main__":
         default="umsi-easy-hub",
         help="name of project, used in all AWS resources")
 
+    parser.add_argument(
+        "--domain",
+        required=True,
+        help="The FQDN which will host the hub")
+
     args = parser.parse_args()
 
     # We plan to allow different names, but this project name is hard coded all
@@ -145,6 +156,7 @@ if __name__ == "__main__":
     config = {}
     config['tag'] = args.tag
     config['project'] = args.project
+    config['domain'] = args.domain
     config['account_id'] = boto3.client(
         'sts').get_caller_identity().get('Account')
     config['ssh_key_name'] = generate_ssh_key(config)

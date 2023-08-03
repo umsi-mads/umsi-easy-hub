@@ -1,6 +1,7 @@
 import boto3
 import argparse
 import yaml
+import pprint
 
 # Still need to add logging!!!
 # Currently, the print statements should be caught by the control_node_startup_script.sh logger
@@ -30,16 +31,26 @@ def get_cf_output(config):
         StackName=config['ControlNodeStackname']
     )
 
-    print(response)
-
     output = {}
     for item in response['Stacks'][0]['Outputs']:
         output[item['OutputKey']] = item['OutputValue']
 
     config.update(output)
-    # config['tag'] = 'test'
 
     return config
+
+
+def find_hosted_zone(config):
+
+    name = '.'.join(config['Domain'].split('.')[-2:]) + '.'
+
+    for zone in boto3.client('route53').list_hosted_zones()['HostedZones']:
+        if name == zone['Name']:
+            config['HostedZoneId'] = zone['Id'].split('/')[-1]
+            break
+
+    return config
+
 
 # Deploy the cluster cloudformation using the boto client
 def create_cluster(config):
@@ -80,6 +91,12 @@ def create_cluster(config):
             },
             {
                 'ParameterKey': 'ControlNodeSecurityGroup', 'ParameterValue': config['ControlNodeSecurityGroup'], 'UsePreviousValue': False
+            },
+            {
+                'ParameterKey': 'Domain', 'ParameterValue': config['Domain'], 'UsePreviousValue': False
+            },
+            {
+                'ParameterKey': 'HostedZoneId', 'ParameterValue': config['HostedZoneId'], 'UsePreviousValue': False
             }
         ],
         Capabilities=[
@@ -108,7 +125,10 @@ if __name__ == "__main__":
 
     config = load_config(config)
 
-    print(config)
+    config = find_hosted_zone(config)
+
+    print("Creating cluster with the following config:")
+    pprint.pprint(config)
 
     # Now deploy the cluster cloudformation
     create_cluster(config)
